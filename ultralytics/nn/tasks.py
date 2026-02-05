@@ -72,6 +72,9 @@ from ultralytics.nn.modules import (
     YOLOESegment,
     YOLOESegment26,
     v10Detect,
+    StandardBranch,
+    DenoisingBranch,
+    AdaptiveFeatureFusion,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -1600,6 +1603,8 @@ def parse_model(d, ch, verbose=True):
             SCDown,
             C2fCIB,
             A2C2f,
+            StandardBranch,
+            DenoisingBranch,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1700,6 +1705,19 @@ def parse_model(d, ch, verbose=True):
             c2 = args[0]
             c1 = ch[f]
             args = [c1, c2, *args[1:]]
+        elif m is StandardBranch:
+            # StandardBranch needs c1 and c2
+            c1 = ch[f] if f >= 0 else ch[f]
+            c2 = args[0]
+            args = [c1, c2, *args[1:]]
+        elif m is DenoisingBranch:
+            # DenoisingBranch always takes 3-channel input (raw image)
+            c1 = ch[f]
+            c2 = args[0]
+            args = [c1, c2, *args[1:]]
+        elif m is AdaptiveFeatureFusion:
+            c2 = ch[f[0]]  # channel of previous layer
+            args = [c2]
         elif m is CBFuse:
             c2 = ch[f[-1]]
         elif m in frozenset({TorchVision, Index}):

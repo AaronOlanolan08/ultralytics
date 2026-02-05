@@ -52,6 +52,9 @@ __all__ = (
     "ResNetLayer",
     "SCDown",
     "TorchVision",
+    "StandardBranch",
+    "DenoisingBranch",
+    "AdaptiveFeatureFusion",
 )
 
 
@@ -2065,3 +2068,97 @@ class RealNVP(nn.Module):
             self.float()
         z, log_det = self.backward_p(x)
         return self.prior.log_prob(z) + log_det
+
+class StandardBranch(nn.Module):
+    def __init__(self, c1, c2, *args):
+        super().__init__()
+
+        k = args[0] if len(args) > 0 else 3
+        s = args[1] if len(args) > 1 else 2
+        p = args[2] if len(args) > 2 else 1
+        g = args[3] if len(args) > 3 else 1
+
+
+        self.conv1 = Conv(c1, c2, k, s, p, g)
+        self.conv2 = Conv(c2, c2, 3, 1, p, g)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        return x
+
+
+class DenoisingBranch(nn.Module):
+    def __init__(self, c1, c2, k, s):
+
+        super().__init__()
+        self.c = int(c2 * 0.5)
+        self.c2 = c2
+
+        self.dw_conv1 = DWConv(c1, self.c, k, s)
+        self.pw_conv1 = Conv(self.c, self.c, 1, 1)
+
+        self.dw_conv2 = DWConv(self.c, c2, k, 1)
+        self.pw_conv2 = Conv(c2, c2, 1, 1)
+        
+        # No bottleneck layers for minimal convs
+        self.m = nn.ModuleList()
+        
+        # Final projection to output channels
+        self.cv2 = Conv(c2, c2, 1)
+
+    def forward(self, x):
+
+        x = self.dw_conv1(x)
+        x = self.pw_conv1(x)
+
+        x = self.dw_conv2(x)
+        x = self.pw_conv2(x)
+
+        x = self.cv2(x)
+
+        return x
+
+
+class AdaptiveFeatureFusion(nn.Module):
+    def __init__(self, c, debug=False):
+        super().__init__()
+        assert c % 32 == 0, "Fusion channels must be multiple of 32"
+
+        self.debug = debug
+
+        self.conv_align = Conv(c, c, 1, 1)
+
+        self.weight_standard = nn.Parameter(torch.ones(1, c, 1, 1) * 0.5)
+        self.weight_denoising = nn.Parameter(torch.ones(1, c, 1, 1) * 0.5)
+
+        hidden_ch = max(c // 16, 8)
+        self.ca = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(c, hidden_ch, 1, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden_ch, c, 1, bias=True),
+            nn.Sigmoid()
+        )
+
+        self.align_conv = None  # avoid recreating every forward
+
+    def forward(self, x):
+        s, d = x
+
+        # Align channels if needed
+        if s.shape[1] != d.shape[1]:
+
+            if self.align_conv is None or self.align_conv.conv.in_channels != d.shape[1]:
+                self.align_conv = Conv(
+                    d.shape[1], s.shape[1], k=1, s=1, p=0, act=False
+                ).to(d.device, d.dtype)
+
+            d = self.align_conv(d)
+
+        fused = self.weight_standard * s + self.weight_denoising * d
+
+        fused = self.conv_align(fused)
+        out = fused * self.ca(fused)
+
+        return out
