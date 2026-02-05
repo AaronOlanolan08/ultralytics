@@ -59,6 +59,9 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+    StandardBranch,
+    DenoisingBranch,
+    AdaptiveFeatureFusion,
 )
 from .conv import (
     CBAM,
@@ -187,4 +190,7 @@ __all__ = (
     "YOLOESegment",
     "YOLOESegment26",
     "v10Detect",
+    "StandardBranch",
+    "DenoisingBranch",
+    "AdaptiveFeatureFusion",
 )
