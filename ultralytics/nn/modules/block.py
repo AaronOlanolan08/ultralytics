@@ -2090,7 +2090,6 @@ class StandardBranch(nn.Module):
 
 class DenoisingBranch(nn.Module):
     def __init__(self, c1, c2, k, s):
-
         super().__init__()
         self.c = int(c2 * 0.5)
         self.c2 = c2
@@ -2100,14 +2099,17 @@ class DenoisingBranch(nn.Module):
 
         self.dw_conv2 = DWConv(self.c, c2, k, 1)
         self.pw_conv2 = Conv(c2, c2, 1, 1)
-        
-        # No bottleneck layers for minimal convs
-        self.m = nn.ModuleList()
-        
-        # Final projection to output channels
+
         self.cv2 = Conv(c2, c2, 1)
 
+        # 🔥 Residual projection (only if needed)
+        if c1 != c2 or s != 1:
+            self.skip = Conv(c1, c2, 1, s)  # match channels + spatial size
+        else:
+            self.skip = nn.Identity()
+
     def forward(self, x):
+        identity = self.skip(x)
 
         x = self.dw_conv1(x)
         x = self.pw_conv1(x)
@@ -2117,7 +2119,7 @@ class DenoisingBranch(nn.Module):
 
         x = self.cv2(x)
 
-        return x
+        return x + identity
 
 
 class AdaptiveFeatureFusion(nn.Module):
@@ -2129,8 +2131,7 @@ class AdaptiveFeatureFusion(nn.Module):
 
         self.conv_align = Conv(c, c, 1, 1)
 
-        self.weight_standard = nn.Parameter(torch.ones(1, c, 1, 1) * 0.5)
-        self.weight_denoising = nn.Parameter(torch.ones(1, c, 1, 1) * 0.5)
+        self.branch_weights = nn.Parameter(torch.ones(2))
 
         hidden_ch = max(c // 16, 8)
         self.ca = nn.Sequential(
@@ -2141,22 +2142,12 @@ class AdaptiveFeatureFusion(nn.Module):
             nn.Sigmoid()
         )
 
-        self.align_conv = None  # avoid recreating every forward
-
     def forward(self, x):
         s, d = x
 
-        # Align channels if needed
-        if s.shape[1] != d.shape[1]:
+        weights = torch.softmax(self.branch_weights, dim=0)
 
-            if self.align_conv is None or self.align_conv.conv.in_channels != d.shape[1]:
-                self.align_conv = Conv(
-                    d.shape[1], s.shape[1], k=1, s=1, p=0, act=False
-                ).to(d.device, d.dtype)
-
-            d = self.align_conv(d)
-
-        fused = self.weight_standard * s + self.weight_denoising * d
+        fused = weights[0] * s + weights[1] * d
 
         fused = self.conv_align(fused)
         out = fused * self.ca(fused)
