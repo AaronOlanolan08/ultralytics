@@ -27,7 +27,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 requirements.txt
-!requirements.txt
 !examples/**/requirements.txt
 setup.py
 ultralytics.egg-info
@@ -158,7 +157,6 @@ wandb/
 weights/
 *.weights
 *.pt
-!models/*.pt
 *.ts
 *.pb
 *.onnx
