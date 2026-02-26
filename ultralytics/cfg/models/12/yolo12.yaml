@@ -24,7 +24,7 @@ backbone:
   # ===== R-ELAN BLOCKS (standard, no attention) =====
   - [-1, 2, C3k2, [256, False, 0.25]] # 3-R-ELAN (P2)
   - [-1, 1, Conv, [256, 3, 2]] # 4-Downsampling to P3/8
-  - [-1, 2, C3k2, [256, False, 0.25]] # 5-R-ELAN (P3)
+  - [-1, 2, C3k2, [512, False, 0.25]] # 5-R-ELAN (P3)
   - [-1, 1, Conv, [512, 3, 2]] # 6-Downsampling to P4/16
   - [-1, 2, A2C2f, [512, True, 4]] # 7-R-ELAN (P4)
   - [-1, 1, Conv, [1024, 3, 2]] # 8-Downsampling to P5/32
