@@ -2080,7 +2080,7 @@ class StandardBranch(nn.Module):
 
 
         self.conv1 = Conv(c1, c2, k, s, p, g)
-        self.conv2 = Conv(c2, c2, 3, 1, p, g)
+        self.conv2 = Conv(c2, c2, 3, 2, p, g)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -2098,7 +2098,7 @@ class DenoisingBranch(nn.Module):
         self.pw_conv1 = Conv(self.c, self.c, 1, 1)
 
         self.dw_conv2 = DWConv(self.c, c2, k, 1)
-        self.pw_conv2 = Conv(c2, c2, 1, 1)
+        self.pw_conv2 = Conv(c2, c2, 1, 2)
 
         self.cv2 = Conv(c2, c2, 1)
 
